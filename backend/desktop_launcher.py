@@ -24,6 +24,20 @@ from pathlib import Path
 APP_DIR_NAME = "SmartInvigilation"
 DEFAULT_INSTITUTION = "local"
 DEFAULT_USERNAME = "super_admin"
+_OUTPUT_SINKS = []
+
+
+def _ensure_output_streams() -> None:
+    """PyInstaller --windowed 下 stdout/stderr 可能为 None。
+
+    原项目仍有少量启动期 print()。将缺失输出流安全接到 os.devnull，
+    避免无控制台的 Windows EXE 因日志输出而崩溃。
+    """
+    for name in ("stdout", "stderr"):
+        if getattr(sys, name, None) is None:
+            sink = open(os.devnull, "w", encoding="utf-8", errors="replace")
+            _OUTPUT_SINKS.append(sink)
+            setattr(sys, name, sink)
 
 
 def _app_data_root() -> Path:
@@ -211,7 +225,6 @@ def _self_test() -> int:
             if not (dist / "index.html").exists():
                 raise RuntimeError("前端资源未打包")
 
-            # 使用唯一模块名，避免 frozen executable 中 ``main`` 与 bootstrap 冲突。
             import server_app as backend_server
             app = backend_server.app
             _attach_desktop_frontend(app, dist)
@@ -255,6 +268,8 @@ def _self_test() -> int:
 
 
 def main() -> int:
+    _ensure_output_streams()
+
     if "--self-test" in sys.argv:
         return _self_test()
 
@@ -262,7 +277,6 @@ def main() -> int:
         _configure_environment()
         dist = _frontend_dist()
 
-        # 环境变量必须在导入 server_app 前准备完成。
         from server_app import app
         import uvicorn
 
