@@ -1,6 +1,7 @@
 """中国监考模块报表导出：总监考表、个人明细、工作量统计。"""
 from collections import defaultdict
 from io import BytesIO
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -29,7 +30,6 @@ from invigilation_models import (
 )
 
 router = APIRouter(prefix="/api/invigilation/export", tags=["invigilation-export"])
-
 
 ROLE_ORDER = {"PRIMARY": 10, "SECONDARY": 20, "ROVING": 30, "INSPECTOR": 40}
 
@@ -68,18 +68,20 @@ def _assignment_rows(db: Session, batch_id: int):
     return rows
 
 
-def _filename_token(value: str) -> str:
-    return "".join(c if c.isalnum() or c in "-_" else "_" for c in value)[:80] or "invigilation"
+def _content_disposition(ascii_name: str, display_name: str) -> str:
+    """RFC 5987 filename*: 兼容 Starlette latin-1 header 与 Windows 中文文件名。"""
+    encoded = quote(display_name, safe="")
+    return f'attachment; filename="{ascii_name}"; filename*=UTF-8\'\'{encoded}'
 
 
-def _xlsx_response(workbook: Workbook, filename: str):
+def _xlsx_response(workbook: Workbook, ascii_name: str, display_name: str):
     output = BytesIO()
     workbook.save(output)
     output.seek(0)
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": _content_disposition(ascii_name, display_name)},
     )
 
 
@@ -137,7 +139,6 @@ def export_xlsx(batch_id: int, db: Session = Depends(get_db), _=Depends(require_
     workload.append(["工号", "姓名", "部门", "甲监", "乙监", "流动监考", "巡考", "总次数", "加权工作量"])
     for teacher_id, teacher in sorted(teacher_info.items(), key=lambda item: item[1].professor_name):
         counts = role_counts[teacher_id]
-        total_count = sum(counts.values())
         workload.append([
             teacher.employee_no,
             teacher.professor_name,
@@ -146,7 +147,7 @@ def export_xlsx(batch_id: int, db: Session = Depends(get_db), _=Depends(require_
             counts["SECONDARY"],
             counts["ROVING"],
             counts["INSPECTOR"],
-            total_count,
+            sum(counts.values()),
             round(weighted[teacher_id], 3),
         ])
     _style_sheet(workload)
@@ -160,7 +161,11 @@ def export_xlsx(batch_id: int, db: Session = Depends(get_db), _=Depends(require_
     meta.append(["监考岗位总数", len(rows)])
     _style_sheet(meta)
 
-    return _xlsx_response(wb, f"{_filename_token(batch.name)}_监考安排.xlsx")
+    return _xlsx_response(
+        wb,
+        f"invigilation_{batch_id}.xlsx",
+        f"{batch.name}_监考安排.xlsx",
+    )
 
 
 def _register_chinese_font():
@@ -192,21 +197,12 @@ def export_pdf(batch_id: int, db: Session = Depends(get_db), _=Depends(require_a
     )
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
-        "CnTitle",
-        parent=styles["Title"],
-        fontName=font_name,
-        fontSize=16,
-        leading=22,
-        alignment=TA_CENTER,
-        spaceAfter=8,
+        "CnTitle", parent=styles["Title"], fontName=font_name,
+        fontSize=16, leading=22, alignment=TA_CENTER, spaceAfter=8,
     )
     note_style = ParagraphStyle(
-        "CnNote",
-        parent=styles["Normal"],
-        fontName=font_name,
-        fontSize=8,
-        leading=11,
-        alignment=TA_CENTER,
+        "CnNote", parent=styles["Normal"], fontName=font_name,
+        fontSize=8, leading=11, alignment=TA_CENTER,
         textColor=colors.HexColor("#555555"),
     )
 
@@ -218,7 +214,6 @@ def export_pdf(batch_id: int, db: Session = Depends(get_db), _=Depends(require_a
         ),
         Spacer(1, 5 * mm),
     ]
-
     data = [["日期", "时段", "地点/考场", "岗位", "监考人员", "工号", "部门", "锁定"]]
     for assignment, session, location, role, teacher in rows:
         data.append([
@@ -252,5 +247,10 @@ def export_pdf(batch_id: int, db: Session = Depends(get_db), _=Depends(require_a
     return StreamingResponse(
         output,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{_filename_token(batch.name)}_invigilation.pdf"'},
+        headers={
+            "Content-Disposition": _content_disposition(
+                f"invigilation_{batch_id}.pdf",
+                f"{batch.name}_监考安排.pdf",
+            )
+        },
     )
