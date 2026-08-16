@@ -42,6 +42,7 @@ jobs:
         working-directory: backend
         shell: pwsh
         run: |
+          $env:PYTHONPATH = "."
           $env:SECRET_KEY = "windows-build-source-smoke-secret-key-2026"
           $env:ADMIN_PASSWORD = "Source-Smoke-123"
           $env:APP_INSTITUCIO = "ci"
