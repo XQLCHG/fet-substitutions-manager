@@ -17,6 +17,8 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -31,7 +33,7 @@ jobs:
       - name: Compile backend
         run: python -m compileall -q .
       - name: Run invigilation tests
-        run: pytest -q tests/test_invigilation_phase2.py tests/test_invigilation_solver.py
+        run: python -m pytest -q tests/test_invigilation_phase2.py tests/test_invigilation_solver.py
 
   frontend:
     runs-on: ubuntu-latest
