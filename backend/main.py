@@ -45,7 +45,22 @@ def _inicialitzar_prioritats():
         print("   Es faran servir les constants del JSON per defecte")
 
 
+def _inicialitzar_invigilation():
+    """初始化中国监考模块默认岗位与基础规则。"""
+    from database import get_data_db_session
+    from config.settings import config
+    from invigilation_defaults import seed_defaults
+
+    try:
+        institucio = os.getenv("APP_INSTITUCIO") or config.global_data.get("institucio") or "exemple"
+        with get_data_db_session(institucio) as db:
+            seed_defaults(db)
+    except Exception as e:
+        print(f"⚠️  监考模块默认配置初始化失败: {e}")
+
+
 _inicialitzar_prioritats()
+_inicialitzar_invigilation()
 
 app = FastAPI(
     title="Gestor Substitucions API",
@@ -135,6 +150,8 @@ from routes import (
     cursos,
     dades,
     invigilation_config,
+    invigilation_exams,
+    invigilation_import,
 )
 
 app.include_router(auth.router)
@@ -156,6 +173,8 @@ app.include_router(informes.router, dependencies=[Depends(require_admin)])
 app.include_router(cursos.router, dependencies=[Depends(get_current_user)])
 app.include_router(dades.router, dependencies=[Depends(require_admin)])
 app.include_router(invigilation_config.router, dependencies=[Depends(get_current_user)])
+app.include_router(invigilation_exams.router, dependencies=[Depends(get_current_user)])
+app.include_router(invigilation_import.router, dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")
