@@ -28,11 +28,7 @@ _OUTPUT_SINKS = []
 
 
 def _ensure_output_streams() -> None:
-    """PyInstaller --windowed 下 stdout/stderr 可能为 None。
-
-    原项目仍有少量启动期 print()。将缺失输出流安全接到 os.devnull，
-    避免无控制台的 Windows EXE 因日志输出而崩溃。
-    """
+    """PyInstaller --windowed 下 stdout/stderr 可能为 None。"""
     for name in ("stdout", "stderr"):
         if getattr(sys, name, None) is None:
             sink = open(os.devnull, "w", encoding="utf-8", errors="replace")
@@ -228,22 +224,31 @@ def _self_test() -> int:
             import server_app as backend_server
             app = backend_server.app
             _attach_desktop_frontend(app, dist)
-            route_paths = {getattr(route, "path", None) for route in app.routes}
-            required_paths = {
+
+            # FastAPI 0.137+ keeps included APIRouters as a route tree. Public
+            # endpoint validation must not rely on top-level app.routes[].path.
+            api_paths = set(app.openapi().get("paths", {}).keys())
+            required_api_paths = {
                 "/api/health",
                 "/api/invigilation/roles",
                 "/api/invigilation/batches",
                 "/api/invigilation/solve/{batch_id}",
                 "/api/invigilation/export/{batch_id}/xlsx",
-                "/invigilation",
             }
-            missing = sorted(path for path in required_paths if path not in route_paths)
+            missing = sorted(required_api_paths - api_paths)
             if missing:
-                actual = sorted(path for path in route_paths if path)
+                actual = sorted(path for path in api_paths if "invigilation" in path)
                 raise RuntimeError(
-                    f"缺少路由: {missing}; server_app={getattr(backend_server, '__file__', None)!r}; "
-                    f"actual_routes={actual!r}"
+                    f"OpenAPI 缺少监考路由: {missing}; "
+                    f"server_app={getattr(backend_server, '__file__', None)!r}; "
+                    f"invigilation_openapi_paths={actual!r}"
                 )
+
+            # /invigilation is intentionally include_in_schema=False. It is a
+            # direct desktop shell route, so verify it separately.
+            direct_paths = {getattr(route, "path", None) for route in app.routes}
+            if "/invigilation" not in direct_paths:
+                raise RuntimeError("桌面前端入口 /invigilation 未注册")
 
             from ortools.sat.python import cp_model
             model = cp_model.CpModel()
