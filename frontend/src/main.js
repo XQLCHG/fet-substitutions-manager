@@ -12,8 +12,10 @@ import 'primevue/resources/primevue.min.css'
 import 'primeicons/primeicons.css'
 
 import App from './App.vue'
+import InvigilationApp from './views/InvigilationApp.vue'
 
-const app = createApp(App)
+const isInvigilationWorkspace = window.location.pathname === '/invigilation' || window.location.pathname.startsWith('/invigilation/')
+const app = createApp(isInvigilationWorkspace ? InvigilationApp : App)
 const pinia = createPinia()
 
 app.use(pinia)
