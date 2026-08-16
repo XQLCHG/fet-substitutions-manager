@@ -1,0 +1,119 @@
+name: Windows Desktop Build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/windows-desktop.yml'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build Vue frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-desktop.txt
+
+      - name: Install backend and packaging dependencies
+        working-directory: backend
+        run: pip install -r requirements.txt -r requirements-desktop.txt
+
+      - name: Smoke-test source application routes
+        working-directory: backend
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "."
+          $env:SECRET_KEY = "windows-build-source-smoke-secret-key-2026"
+          $env:ADMIN_PASSWORD = "Source-Smoke-123"
+          $env:APP_INSTITUCIO = "ci"
+          $env:ADMIN_INSTITUCIO = "ci"
+          $env:COOKIE_SECURE = "false"
+          $env:ENVIRONMENT = "production"
+          python tests/windows_route_smoke.py
+
+      - name: Build standalone executable
+        working-directory: backend
+        shell: pwsh
+        run: |
+          pyinstaller `
+            --noconfirm `
+            --clean `
+            --onefile `
+            --windowed `
+            --name SmartInvigilation `
+            --add-data "../frontend/dist;frontend_dist" `
+            --hidden-import server_app `
+            --hidden-import invigilation_models `
+            --hidden-import invigilation_defaults `
+            --hidden-import invigilation_engine `
+            --hidden-import invigilation_engine.solver `
+            --hidden-import routes.invigilation_config `
+            --hidden-import routes.invigilation_exams `
+            --hidden-import routes.invigilation_import `
+            --hidden-import routes.invigilation_solver `
+            --hidden-import routes.invigilation_export `
+            --collect-submodules routes `
+            --collect-submodules invigilation_engine `
+            --collect-all ortools `
+            --collect-all reportlab `
+            desktop_launcher.py
+
+      - name: Self-test packaged executable
+        working-directory: backend
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path ".\dist\SmartInvigilation.exe"
+          $process = Start-Process -FilePath $exe -ArgumentList "--self-test" -Wait -PassThru
+          if ($process.ExitCode -ne 0) {
+            $log = Join-Path $env:TEMP "smart-invigilation-selftest-error.txt"
+            if (Test-Path $log) { Get-Content $log }
+            throw "Packaged executable self-test failed with exit code $($process.ExitCode)"
+          }
+
+      - name: Prepare portable package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package | Out-Null
+          Copy-Item backend\dist\SmartInvigilation.exe package\SmartInvigilation.exe
+          Copy-Item LICENSE package\LICENSE
+          Copy-Item docs\INVIGILATION_APP.md package\使用说明.md
+          @"
+          智能监考排班系统 Windows 本地版
+
+          1. 双击 SmartInvigilation.exe。
+          2. 第一次启动会要求设置 super_admin 密码。
+          3. 浏览器会自动打开本地工作台。
+          4. 数据保存在当前 Windows 用户的：
+             %LOCALAPPDATA%\SmartInvigilation\data
+          5. 软件仅监听 127.0.0.1，不需要公网服务器。
+
+          本程序基于 GNU AGPL v3+ 项目修改。
+          对应源代码：当前仓库及本构建所对应的 Git commit。
+          "@ | Set-Content -Encoding UTF8 package\README.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SmartInvigilation-Windows-x64
+          path: package/
+          if-no-files-found: error
+          retention-days: 30
