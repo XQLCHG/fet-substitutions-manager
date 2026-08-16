@@ -48,7 +48,7 @@ jobs:
           $env:ADMIN_INSTITUCIO = "ci"
           $env:COOKIE_SECURE = "false"
           $env:ENVIRONMENT = "production"
-          python -c "import server_app; paths={getattr(r,'path',None) for r in server_app.app.routes}; required={'/api/health','/api/invigilation/roles','/api/invigilation/batches','/api/invigilation/solve/{batch_id}','/api/invigilation/export/{batch_id}/xlsx'}; missing=sorted(required-paths); print('server_app=', server_app.__file__); print('invigilation_routes=', sorted(p for p in paths if p and 'invigilation' in p)); assert not missing, f'missing routes: {missing}'"
+          python tests/windows_route_smoke.py
 
       - name: Build standalone executable
         working-directory: backend
