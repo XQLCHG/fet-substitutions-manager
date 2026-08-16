@@ -15,10 +15,11 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 
 from models import Base, User
+# IMPORTANT: import side-effect registers the China invigilation extension tables
+# on the same SQLAlchemy Base before create_all() is called.
+import invigilation_models  # noqa: F401
 
 BASE_DIR = Path(__file__).resolve().parent
-# DATA_DIR apunta a la carpeta data/ a l'arrel del projecte (dos nivells amunt)
-# Això permet multi-institució: data/centre1, data/centre2, etc.
 PROJECT_DATA_ROOT = BASE_DIR.parent / "data"
 DATA_BASE_DIR = Path(os.getenv("DATA_DIR", PROJECT_DATA_ROOT))
 
@@ -33,7 +34,6 @@ def _create_engine(db_path: Path):
 
 
 def get_auth_db_path() -> Path:
-    # auth.db està a l'arrel de data/ (global per totes les institucions)
     return Path(os.getenv("AUTH_DB_PATH", DATA_BASE_DIR / "auth.db"))
 
 
@@ -42,7 +42,6 @@ AuthSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=AUTH_ENG
 
 
 def create_auth_tables():
-    """Crea només taules d'autenticació"""
     Base.metadata.create_all(bind=AUTH_ENGINE, tables=[User.__table__])
 
 
@@ -80,12 +79,10 @@ def _data_tables():
 
 
 def create_data_tables(engine):
-    """Crea taules de dades (exclou users)"""
     Base.metadata.create_all(bind=engine, tables=_data_tables())
 
 
 def _ensure_substitucions_aula_column(engine):
-    """Assegura que la taula substitucions té la columna aula (migració simple)."""
     try:
         with engine.connect() as conn:
             columns = conn.exec_driver_sql("PRAGMA table_info(substitucions);").fetchall()
@@ -93,7 +90,6 @@ def _ensure_substitucions_aula_column(engine):
             if "aula" not in column_names:
                 conn.exec_driver_sql("ALTER TABLE substitucions ADD COLUMN aula VARCHAR")
     except Exception:
-        # Si la taula no existeix encara o ja està migrada, no cal fer res
         pass
 
 
@@ -148,7 +144,6 @@ def get_data_db_session(institucio: str):
 
 @contextmanager
 def get_db_session():
-    """Compatibilitat: sessió de dades segons institució global configurada."""
     from config.settings import config
 
     instit = config.global_data.get("institucio") or os.getenv("APP_INSTITUCIO") or "exemple"
