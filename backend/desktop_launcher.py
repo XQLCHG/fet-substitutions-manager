@@ -211,8 +211,9 @@ def _self_test() -> int:
             if not (dist / "index.html").exists():
                 raise RuntimeError("前端资源未打包")
 
-            # Import main 会真实初始化认证库、机构 SQLite 和全部 FastAPI routers。
-            from main import app
+            # 使用唯一模块名，避免 frozen executable 中 ``main`` 与 bootstrap 冲突。
+            import server_app as backend_server
+            app = backend_server.app
             _attach_desktop_frontend(app, dist)
             route_paths = {getattr(route, "path", None) for route in app.routes}
             required_paths = {
@@ -225,9 +226,12 @@ def _self_test() -> int:
             }
             missing = sorted(path for path in required_paths if path not in route_paths)
             if missing:
-                raise RuntimeError(f"缺少路由: {missing}")
+                actual = sorted(path for path in route_paths if path)
+                raise RuntimeError(
+                    f"缺少路由: {missing}; server_app={getattr(backend_server, '__file__', None)!r}; "
+                    f"actual_routes={actual!r}"
+                )
 
-            # 验证 OR-Tools 的 native extension 在 PyInstaller 包内可正常执行。
             from ortools.sat.python import cp_model
             model = cp_model.CpModel()
             x = model.new_bool_var("x")
@@ -236,13 +240,11 @@ def _self_test() -> int:
             if solver.solve(model) not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
                 raise RuntimeError("OR-Tools CP-SAT 自检失败")
 
-            # 验证 ReportLab CJK 字体支持模块被带入。
             from routes.invigilation_export import _register_chinese_font
             if not _register_chinese_font():
                 raise RuntimeError("PDF 中文字体模块自检失败")
         return 0
     except Exception as exc:
-        # windowed exe 没有控制台，但 GitHub Actions 仍会拿到非零退出码。
         try:
             (Path(tempfile.gettempdir()) / "smart-invigilation-selftest-error.txt").write_text(
                 repr(exc), encoding="utf-8"
@@ -260,8 +262,8 @@ def main() -> int:
         _configure_environment()
         dist = _frontend_dist()
 
-        # 必须在环境变量准备完成后导入：auth/config 会在 import 阶段读取环境变量。
-        from main import app
+        # 环境变量必须在导入 server_app 前准备完成。
+        from server_app import app
         import uvicorn
 
         _attach_desktop_frontend(app, dist)
