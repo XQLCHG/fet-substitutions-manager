@@ -152,6 +152,7 @@ from routes import (
     invigilation_config,
     invigilation_exams,
     invigilation_import,
+    invigilation_solver,
 )
 
 app.include_router(auth.router)
@@ -175,6 +176,7 @@ app.include_router(dades.router, dependencies=[Depends(require_admin)])
 app.include_router(invigilation_config.router, dependencies=[Depends(get_current_user)])
 app.include_router(invigilation_exams.router, dependencies=[Depends(get_current_user)])
 app.include_router(invigilation_import.router, dependencies=[Depends(get_current_user)])
+app.include_router(invigilation_solver.router, dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")
