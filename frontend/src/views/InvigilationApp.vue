@@ -146,9 +146,13 @@
           </div>
 
           <div class="panel">
-            <div class="panel-title">
+            <div class="panel-title result-header">
               <div><h2>监考安排结果</h2><p>锁定后再次自动排班，该人员和岗位保持不变；其余岗位允许局部重排。</p></div>
-              <Button icon="pi pi-refresh" label="刷新" text @click="loadAssignments" :disabled="!selectedBatchId" />
+              <div class="result-actions">
+                <Button icon="pi pi-file-excel" label="导出 Excel" severity="success" outlined @click="downloadReport('xlsx')" :disabled="!selectedBatchId || !assignments.length" />
+                <Button icon="pi pi-file-pdf" label="打印版 PDF" severity="danger" outlined @click="downloadReport('pdf')" :disabled="!selectedBatchId || !assignments.length" />
+                <Button icon="pi pi-refresh" label="刷新" text @click="loadAssignments" :disabled="!selectedBatchId" />
+              </div>
             </div>
             <DataTable :value="assignments" size="small" stripedRows paginator :rows="20" :rowsPerPageOptions="[20, 50, 100]" emptyMessage="当前批次还没有排班结果">
               <Column field="date" header="日期" sortable />
@@ -178,7 +182,7 @@
         <section v-else-if="activeTab === 'people'" class="panel-stack">
           <div class="panel">
             <div class="panel-title">
-              <div><h2>监考人员</h2><p>人员资格可通过 Excel 批量维护；后续版本会在这里加入行内编辑。</p></div>
+              <div><h2>监考人员</h2><p>人员资格可通过 Excel 批量维护，也可通过后端配置接口单独修改。</p></div>
               <span class="count-badge">{{ teachers.length }} 人</span>
             </div>
             <DataTable :value="teachers" size="small" stripedRows paginator :rows="20" emptyMessage="尚未导入人员">
@@ -360,12 +364,41 @@ async function createBatch() {
 async function downloadTemplate(endpoint, filename) {
   try {
     const response = await axios.get(`/api/invigilation/import/${endpoint}`, { responseType: 'blob' })
-    const url = URL.createObjectURL(response.data)
-    const link = document.createElement('a')
-    link.href = url; link.download = filename; link.click()
-    URL.revokeObjectURL(url)
+    saveBlob(response.data, filename)
   } catch (error) {
     notify('error', '下载失败', error.response?.data?.detail || error.message)
+  }
+}
+
+function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
+
+async function downloadReport(format) {
+  if (!selectedBatchId.value) return
+  try {
+    const response = await axios.get(`/api/invigilation/export/${selectedBatchId.value}/${format}`, { responseType: 'blob' })
+    const selected = batches.value.find(batch => String(batch.id) === String(selectedBatchId.value))
+    const base = selected?.name || `监考安排_${selectedBatchId.value}`
+    saveBlob(response.data, `${base}_监考安排.${format}`)
+  } catch (error) {
+    let detail = error.message
+    if (error.response?.data instanceof Blob) {
+      try {
+        const text = await error.response.data.text()
+        detail = JSON.parse(text)?.detail || detail
+      } catch (_) {}
+    } else {
+      detail = error.response?.data?.detail || detail
+    }
+    notify('error', '导出失败', detail)
   }
 }
 
@@ -474,6 +507,7 @@ onMounted(checkAuth)
 .panel h2, .panel h3 { margin: 0; }
 .panel p { color: #667085; margin: 6px 0 0; }
 .panel-title { display: flex; justify-content: space-between; align-items: center; gap: 15px; }
+.result-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .create-row { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px; margin-top: 18px; }
 .mt-16 { margin-top: 16px; }
 .import-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -505,7 +539,8 @@ onMounted(checkAuth)
   .summary-grid { grid-template-columns: 1fr 1fr; }
   .import-grid { grid-template-columns: 1fr; }
   .create-row { grid-template-columns: 1fr; }
-  .solver-hero { align-items: flex-start; flex-direction: column; }
+  .solver-hero, .result-header { align-items: flex-start; flex-direction: column; }
+  .result-actions { justify-content: flex-start; }
   .rule-row { grid-template-columns: 1fr; }
 }
 </style>
