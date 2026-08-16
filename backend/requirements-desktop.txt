@@ -1,0 +1,2 @@
+# Windows standalone executable packaging
+pyinstaller==6.21.0
