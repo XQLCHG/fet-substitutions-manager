@@ -1,6 +1,7 @@
 name: Invigilation CI
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - feature/china-invigilation-app
