@@ -22,6 +22,9 @@ jobs:
       ENVIRONMENT: development
       SECRET_KEY: invigilation-ci-only-secret-key-2026-not-for-production
       COOKIE_SECURE: 'false'
+      APP_INSTITUCIO: ci
+      ADMIN_INSTITUCIO: ci
+      ADMIN_PASSWORD: Source-Smoke-123
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,6 +44,8 @@ jobs:
           tests/test_invigilation_phase2.py
           tests/test_invigilation_solver.py
           tests/test_invigilation_export.py
+      - name: Smoke-test FastAPI router registration
+        run: python tests/windows_route_smoke.py
 
   frontend:
     runs-on: ubuntu-latest
