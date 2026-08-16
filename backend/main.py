@@ -153,6 +153,7 @@ from routes import (
     invigilation_exams,
     invigilation_import,
     invigilation_solver,
+    invigilation_export,
 )
 
 app.include_router(auth.router)
@@ -177,6 +178,7 @@ app.include_router(invigilation_config.router, dependencies=[Depends(get_current
 app.include_router(invigilation_exams.router, dependencies=[Depends(get_current_user)])
 app.include_router(invigilation_import.router, dependencies=[Depends(get_current_user)])
 app.include_router(invigilation_solver.router, dependencies=[Depends(get_current_user)])
+app.include_router(invigilation_export.router, dependencies=[Depends(get_current_user)])
 
 
 @app.get("/")
