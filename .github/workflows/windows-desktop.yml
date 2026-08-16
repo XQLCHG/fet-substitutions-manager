@@ -49,6 +49,18 @@ jobs:
             --windowed `
             --name SmartInvigilation `
             --add-data "../frontend/dist;frontend_dist" `
+            --hidden-import main `
+            --hidden-import invigilation_models `
+            --hidden-import invigilation_defaults `
+            --hidden-import invigilation_engine `
+            --hidden-import invigilation_engine.solver `
+            --hidden-import routes.invigilation_config `
+            --hidden-import routes.invigilation_exams `
+            --hidden-import routes.invigilation_import `
+            --hidden-import routes.invigilation_solver `
+            --hidden-import routes.invigilation_export `
+            --collect-submodules routes `
+            --collect-submodules invigilation_engine `
             --collect-all ortools `
             --collect-all reportlab `
             desktop_launcher.py
