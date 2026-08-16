@@ -17,7 +17,7 @@ DEFAULT_ROLES = [
 
 DEFAULT_RULES = [
     dict(key="avoid_course_teacher", value="true", value_type="bool",
-         description="任课教师默认回避自己课程的监考"),
+         description="任课教师默认回避自己课程的考场监考"),
     dict(key="max_daily_duties_default", value="2", value_type="int",
          description="未单独设置人员上限时，每人每天最多监考场次"),
     dict(key="avoid_consecutive_duties", value="true", value_type="bool",
@@ -26,6 +26,12 @@ DEFAULT_RULES = [
          description="加权工作量公平性的优化权重"),
     dict(key="consecutive_penalty", value="20", value_type="int",
          description="连续监考软约束惩罚"),
+    dict(key="stability_reward", value="10", value_type="int",
+         description="重新排班时保留原未锁定分配的奖励，减少无意义换人"),
+    dict(key="solver_time_limit_seconds", value="30", value_type="int",
+         description="CP-SAT 单次求解最大时间（秒）"),
+    dict(key="solver_workers", value="8", value_type="int",
+         description="CP-SAT 并行搜索 worker 数量"),
 ]
 
 
