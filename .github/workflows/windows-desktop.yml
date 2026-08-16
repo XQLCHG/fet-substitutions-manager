@@ -38,6 +38,18 @@ jobs:
         working-directory: backend
         run: pip install -r requirements.txt -r requirements-desktop.txt
 
+      - name: Smoke-test source application routes
+        working-directory: backend
+        shell: pwsh
+        run: |
+          $env:SECRET_KEY = "windows-build-source-smoke-secret-key-2026"
+          $env:ADMIN_PASSWORD = "Source-Smoke-123"
+          $env:APP_INSTITUCIO = "ci"
+          $env:ADMIN_INSTITUCIO = "ci"
+          $env:COOKIE_SECURE = "false"
+          $env:ENVIRONMENT = "production"
+          python -c "import server_app; paths={getattr(r,'path',None) for r in server_app.app.routes}; required={'/api/health','/api/invigilation/roles','/api/invigilation/batches','/api/invigilation/solve/{batch_id}','/api/invigilation/export/{batch_id}/xlsx'}; missing=sorted(required-paths); print('server_app=', server_app.__file__); print('invigilation_routes=', sorted(p for p in paths if p and 'invigilation' in p)); assert not missing, f'missing routes: {missing}'"
+
       - name: Build standalone executable
         working-directory: backend
         shell: pwsh
@@ -49,7 +61,7 @@ jobs:
             --windowed `
             --name SmartInvigilation `
             --add-data "../frontend/dist;frontend_dist" `
-            --hidden-import main `
+            --hidden-import server_app `
             --hidden-import invigilation_models `
             --hidden-import invigilation_defaults `
             --hidden-import invigilation_engine `
