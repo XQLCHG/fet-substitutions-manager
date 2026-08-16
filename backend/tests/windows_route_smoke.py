@@ -1,7 +1,9 @@
 """Source-runtime diagnostics for the invigilation FastAPI routers.
 
-The script is intentionally plain Python so both Linux and Windows workflows can
-print exact module origins, router contents and FastAPI registration behavior.
+FastAPI 0.137+ keeps included routers as a route tree instead of flattening every
+child endpoint into ``app.routes``. Therefore final endpoint validation uses the
+OpenAPI path table, which represents the public API regardless of the internal
+route-tree representation.
 """
 from __future__ import annotations
 
@@ -28,7 +30,6 @@ def main() -> int:
     print("routes_module=", getattr(routes, "__file__", None))
     print("server_app=", getattr(server_app, "__file__", None))
 
-    expected_full_paths = set()
     for name in module_names:
         module = importlib.import_module(name)
         short_name = name.rsplit(".", 1)[-1]
@@ -43,25 +44,20 @@ def main() -> int:
         print(f"{name}.route_count=", len(route_paths))
         print(f"{name}.paths=", route_paths)
 
-        prefix = getattr(router, "prefix", "") or ""
-        expected_full_paths.update(f"{prefix}{path}" for path in route_paths if path)
-
-        # Independent FastAPI probe: verifies that the router itself can be
-        # included under the currently installed FastAPI/Starlette versions.
+        # Independent include probe. OpenAPI is intentionally used here too,
+        # because the internal route tree is not a stable public inspection API.
         probe = FastAPI()
         probe.include_router(router)
-        probe_paths = sorted(
-            path for path in {getattr(route, "path", None) for route in probe.routes}
-            if path and "invigilation" in path
-        )
-        print(f"{name}.probe_paths=", probe_paths)
+        probe_paths = sorted(probe.openapi().get("paths", {}).keys())
+        print(f"{name}.probe_openapi_paths=", probe_paths)
 
-    app_paths = {getattr(route, "path", None) for route in server_app.app.routes}
-    app_paths_clean = sorted(path for path in app_paths if path)
-    invigilation_paths = [path for path in app_paths_clean if "invigilation" in path]
-    print("app_route_count=", len(app_paths_clean))
-    print("app_invigilation_routes=", invigilation_paths)
-    print("app_all_routes=", app_paths_clean)
+    top_level_types = [type(route).__name__ for route in server_app.app.routes]
+    print("app_top_level_route_types=", top_level_types)
+
+    openapi_paths = set(server_app.app.openapi().get("paths", {}).keys())
+    invigilation_paths = sorted(path for path in openapi_paths if "invigilation" in path)
+    print("openapi_path_count=", len(openapi_paths))
+    print("openapi_invigilation_routes=", invigilation_paths)
 
     required = {
         "/api/health",
@@ -70,11 +66,12 @@ def main() -> int:
         "/api/invigilation/solve/{batch_id}",
         "/api/invigilation/export/{batch_id}/xlsx",
     }
-    missing = sorted(required - app_paths)
+    missing = sorted(required - openapi_paths)
     if missing:
-        print("expected_full_paths=", sorted(expected_full_paths))
-        print("missing=", missing)
+        print("missing_openapi_paths=", missing)
         return 2
+
+    print("ROUTE_SMOKE=PASS")
     return 0
 
 
