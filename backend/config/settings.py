@@ -33,7 +33,7 @@ class Config:
         # Si hi ha variables d'entorn definides, prioritzar-les sobre el JSON
         if os.getenv("APP_INSTITUCIO"):
             self.global_data["institucio"] = os.getenv("APP_INSTITUCIO")
-            print(f"🌐 Institucio override des d'ENV: {os.getenv('APP_INSTITUCIO')}")
+            print(f"[config] Institucio override des d'ENV: {os.getenv('APP_INSTITUCIO')}")
 
         # ===== CONFIG PER INSTITUCIÓ (SQLite) =====
         self.institucio_defaults = {
@@ -50,7 +50,7 @@ class Config:
         # Aplicar override de xml_horari_path si existeix a ENV
         if os.getenv("APP_XML_PATH"):
             self.institucio_data["xml_horari_path"] = os.getenv("APP_XML_PATH")
-            print(f"🌐 XML path override des d'ENV: {os.getenv('APP_XML_PATH')}")
+            print(f"[config] XML path override des d'ENV: {os.getenv('APP_XML_PATH')}")
             self.save_institucio()
 
     def load_global(self):
@@ -314,12 +314,12 @@ class Config:
         self.save_global()
         self.load_institucio()  # Recarregar config de la nova institució
 
-        # 🔧 IMPORTANT: Recarregar prioritats quan canvia la institució
+        # IMPORTANT: Recarregar prioritats quan canvia la institució
         # Les prioritats són globals i s'han de recalcular des de BD
         self._reload_prioritats()
 
-        print(f"✅ Institució seleccionada: {institucio}")
-        print(f"📁 Directori de dades: {self.data_dir}")
+        print(f"[ok] Institució seleccionada: {institucio}")
+        print(f"[config] Directori de dades: {self.data_dir}")
 
     def _reload_prioritats(self):
         """Recalcula les prioritats, nivells i abreviatures globals després de canviar d'institució"""
@@ -335,9 +335,9 @@ class Config:
 
             # Invalidar cache d'abreviatures per forçar nova lectura
             invalidar_cache_abreviatures()
-            print(f"✅ Cache d'abreviatures invalidat")
+            print("[ok] Cache d'abreviatures invalidat")
         except Exception as e:
-            print(f"⚠️ Error recarregant prioritats/nivells: {e}")
+            print(f"[warn] Error recarregant prioritats/nivells: {e}")
 
     # ====== PATHS CENTRALITZATS DE FITXERS JSON ======
     # Propietats per accés unificat a tots els fitxers JSON del sistema
@@ -379,7 +379,7 @@ class Config:
 
     @property
     def configuracio_examens_path(self) -> Path:
-        """Path del fitxer de configuració d'exàmens"""
+        """Path del fitxer de configuracions d'exàmens"""
         return Path(self.data_dir) / "configuracio_examens.json"
 
     @property
