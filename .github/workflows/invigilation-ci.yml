@@ -33,7 +33,11 @@ jobs:
       - name: Compile backend
         run: python -m compileall -q .
       - name: Run invigilation tests
-        run: python -m pytest -q tests/test_invigilation_phase2.py tests/test_invigilation_solver.py
+        run: >-
+          python -m pytest -q
+          tests/test_invigilation_phase2.py
+          tests/test_invigilation_solver.py
+          tests/test_invigilation_export.py
 
   frontend:
     runs-on: ubuntu-latest
