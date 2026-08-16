@@ -19,6 +19,9 @@ jobs:
         working-directory: backend
     env:
       PYTHONPATH: .
+      ENVIRONMENT: development
+      SECRET_KEY: invigilation-ci-only-secret-key-2026-not-for-production
+      COOKIE_SECURE: 'false'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
