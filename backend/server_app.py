@@ -8,13 +8,35 @@ module. ``main.py`` remains a compatibility wrapper for ``uvicorn main:app``.
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Depends, Request
-from fastapi.responses import JSONResponse
 import logging
 import os
+import sys
 import time
-from fastapi.middleware.cors import CORSMiddleware
 from datetime import datetime
+
+
+def _configure_console_streams() -> None:
+    """Make legacy startup prints safe on Windows consoles.
+
+    The upstream project contains a few emoji/non-ASCII status prints. Windows
+    runners and some local shells default to cp1252, which can raise
+    UnicodeEncodeError during module import. Reconfigure existing text streams to
+    UTF-8; windowed PyInstaller builds have no streams and are handled separately
+    by ``desktop_launcher``.
+    """
+    for stream in (getattr(sys, "stdout", None), getattr(sys, "stderr", None)):
+        if stream is not None and hasattr(stream, "reconfigure"):
+            try:
+                stream.reconfigure(encoding="utf-8", errors="replace")
+            except (AttributeError, ValueError, OSError):
+                pass
+
+
+_configure_console_streams()
+
+from fastapi import FastAPI, Depends, Request
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
