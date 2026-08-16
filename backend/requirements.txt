@@ -21,6 +21,9 @@ slowapi==0.1.10
 # PDF generation
 reportlab==5.0.0
 
+# Excel import/export for the China invigilation module
+openpyxl==3.1.5
+
 # i18n (traduccions)
 babel==2.18.0
 
