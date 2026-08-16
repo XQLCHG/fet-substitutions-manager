@@ -15,6 +15,7 @@ import secrets
 import socket
 import sqlite3
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
@@ -138,8 +139,7 @@ def _show_error(message: str) -> None:
         pass
 
 
-def _configure_environment() -> tuple[Path, Path]:
-    root = _app_data_root()
+def _set_common_environment(root: Path, *, password: str | None) -> Path:
     data_root = root / "data"
     root.mkdir(parents=True, exist_ok=True)
     data_root.mkdir(parents=True, exist_ok=True)
@@ -152,14 +152,22 @@ def _configure_environment() -> tuple[Path, Path]:
     os.environ["ADMIN_USERNAME"] = DEFAULT_USERNAME
     os.environ["COOKIE_SECURE"] = "false"
     os.environ["ENVIRONMENT"] = "production"
-    os.environ["SECRET_KEY"] = _read_or_create_secret(root)
     os.environ["DESKTOP_MODE"] = "1"
-
-    if not _admin_exists(auth_db, DEFAULT_USERNAME):
-        os.environ["ADMIN_PASSWORD"] = _ask_first_run_password()
+    os.environ["SECRET_KEY"] = _read_or_create_secret(root)
+    if password:
+        os.environ["ADMIN_PASSWORD"] = password
     else:
         os.environ.pop("ADMIN_PASSWORD", None)
+    return auth_db
 
+
+def _configure_environment() -> tuple[Path, Path]:
+    root = _app_data_root()
+    auth_db = root / "data" / "auth.db"
+    password = None
+    if not _admin_exists(auth_db, DEFAULT_USERNAME):
+        password = _ask_first_run_password()
+    auth_db = _set_common_environment(root, password=password)
     return root, auth_db
 
 
@@ -193,7 +201,61 @@ def _open_browser(port: int) -> None:
     webbrowser.open(f"http://127.0.0.1:{port}/invigilation", new=1)
 
 
+def _self_test() -> int:
+    """CI 对打包后的 exe 做真实 import/native-library 自检。"""
+    try:
+        with tempfile.TemporaryDirectory(prefix="smart-invigilation-test-") as tmp:
+            root = Path(tmp)
+            _set_common_environment(root, password="SelfTest-Only-123")
+            dist = _frontend_dist()
+            if not (dist / "index.html").exists():
+                raise RuntimeError("前端资源未打包")
+
+            # Import main 会真实初始化认证库、机构 SQLite 和全部 FastAPI routers。
+            from main import app
+            _attach_desktop_frontend(app, dist)
+            route_paths = {getattr(route, "path", None) for route in app.routes}
+            required_paths = {
+                "/api/health",
+                "/api/invigilation/roles",
+                "/api/invigilation/batches",
+                "/api/invigilation/solve/{batch_id}",
+                "/api/invigilation/export/{batch_id}/xlsx",
+                "/invigilation",
+            }
+            missing = sorted(path for path in required_paths if path not in route_paths)
+            if missing:
+                raise RuntimeError(f"缺少路由: {missing}")
+
+            # 验证 OR-Tools 的 native extension 在 PyInstaller 包内可正常执行。
+            from ortools.sat.python import cp_model
+            model = cp_model.CpModel()
+            x = model.new_bool_var("x")
+            model.add(x == 1)
+            solver = cp_model.CpSolver()
+            if solver.solve(model) not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                raise RuntimeError("OR-Tools CP-SAT 自检失败")
+
+            # 验证 ReportLab CJK 字体支持模块被带入。
+            from routes.invigilation_export import _register_chinese_font
+            if not _register_chinese_font():
+                raise RuntimeError("PDF 中文字体模块自检失败")
+        return 0
+    except Exception as exc:
+        # windowed exe 没有控制台，但 GitHub Actions 仍会拿到非零退出码。
+        try:
+            (Path(tempfile.gettempdir()) / "smart-invigilation-selftest-error.txt").write_text(
+                repr(exc), encoding="utf-8"
+            )
+        except Exception:
+            pass
+        return 2
+
+
 def main() -> int:
+    if "--self-test" in sys.argv:
+        return _self_test()
+
     try:
         _configure_environment()
         dist = _frontend_dist()
